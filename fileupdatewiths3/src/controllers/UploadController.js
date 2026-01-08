@@ -1,13 +1,15 @@
 import BaseController from "../utils/BaseController.js"
 import fileUpload from "express-fileupload"
 import { fileUploaderService } from "../services/fileUploaderService.js"
+import { Auth0Provider } from "@bcwdev/auth0provider"
 
 export class UploadController extends BaseController {
   constructor() {
     super('api/upload')
     this.router
+      .use(Auth0Provider.getAuthorizedUserInfo)
       .get('', this.getUploads)
-      .use(fileUpload({ limits: { fileSize: 50 * 1024 * 1024 }, useTempFiles: true }))
+      .use(fileUpload({ limits: { fileSize: 50 * 1024 * 1024 }, useTempFiles: false }))
       .post('', this.uploadFiles)
       .delete('', this.deleteFile)
   }
@@ -15,7 +17,7 @@ export class UploadController extends BaseController {
   async getUploads(request, response, next) {
     try {
       const folder = request.query.folder || 'uploads'
-      const uploadedImages = await fileUploaderService.getUploads(folder)
+      const uploadedImages = await fileUploaderService.getUploads(folder, request.userInfo.id)
       response.send(uploadedImages)
     } catch (error) {
       next(error)
@@ -48,7 +50,7 @@ export class UploadController extends BaseController {
         }
 
         try {
-          const url = await fileUploaderService.uploadAsync(file, folder)
+          const url = await fileUploaderService.uploadAsync(file, folder, request.userInfo.id)
           result.success = true
           result.url = url
         } catch (ex) {

@@ -2,7 +2,7 @@ import { S3Client, DeleteObjectCommand, PutObjectCommand, ListObjectsV2Command }
 import path from "path"
 import { randomUUID } from "crypto"
 import fs from "fs"
-import { imageProcessingHelper } from "./ImageProcessingHelper.js"
+import { imageProcessingHelper } from "../utils/ImageProcessingHelper.js"
 
 
 class FileUploaderService {
@@ -20,6 +20,8 @@ class FileUploaderService {
         secretAccessKey: this.secretAccessKey
       }
     })
+
+    
   }
 
   /**
@@ -28,14 +30,15 @@ class FileUploaderService {
    * @param {string} folder
    * @returns {Promise<string>} Public URL
    */
-  async uploadAsync(file, folder = "") {
+  async uploadAsync(file, folder = "", userId = "anonymous") {
     const originalExt = path.extname(file.name).toLowerCase()
     const isImage = imageProcessingHelper.isImage(originalExt)
     const filename = imageProcessingHelper.sanitizeFileName(file.name)
     const timestamp = new Date().toISOString().replace(/[-:.TZ]/g, "")
     const finalExt = isImage ? ".webp" : originalExt
     //REVIEW: This was original (with 2 \\ in the replace) but didn't like so updated below? `${folder.replace(/\\/$/, "")}/${filename}-${timestamp}${finalExt}`
-    const key = `${folder.replace(/\/$/, "")}/${filename}-${timestamp}${finalExt}`
+    const key = `${folder.replace(/\/$/, "")}/${userId}/${filename}-${timestamp}${finalExt}`
+    // const key = 'uploads/example/jakes-stuff/' + filename
 
 
     let buffer = file.data
@@ -62,15 +65,20 @@ class FileUploaderService {
    * @param {string} folder
    * @returns {Promise<string[]>}
    */
-  async getUploads(folder = "") {
+  async getUploads(folder = "uploads", userId = "anonymous") {
     const command = new ListObjectsV2Command({
       Bucket: this.bucket,
-      Prefix: folder
+      Prefix: folder + "/" + userId
     })
 
     const response = await this.s3Client.send(command)
     const contents = response.Contents || []
-    return contents.map((obj) => `${this.basePath}/${obj.Key}`)
+    return contents.map((obj) => {return {
+      url: `${this.basePath}/${obj.Key}`,
+      size: obj.Size,
+      isImage: imageProcessingHelper.isImage(path.extname(obj.Key)),
+      extension: path.extname(obj.Key)
+    }})
   }
 
   /**
